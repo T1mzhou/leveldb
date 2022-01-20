@@ -44,6 +44,10 @@ namespace port {
 class CondVar;
 
 // Thinly wraps std::mutex.
+// LOCKABLE启动线程安全注解 THREAD_ANNOTATION_ATTRIBUTE__(lockable)
+// Clang >= 3.5 && 编译选项  clang -Wthread-safety
+// 线程安全注解的基本思路是，通过代码注解(annotations)告诉编译器哪些成员变量和成员函数是受哪个 mutex 保护，这样如果忘记了加锁，编译器会给警告。
+// 用户只要在自己的代码中用 GUARDED_BY 表明哪个成员变量是被哪个 mutex 保护的（用法见下图），就可以让 clang 帮你检查有没有遗漏加锁的情况了。
 class LOCKABLE Mutex {
  public:
   Mutex() = default;
@@ -71,7 +75,7 @@ class CondVar {
   CondVar& operator=(const CondVar&) = delete;
 
   void Wait() {
-    std::unique_lock<std::mutex> lock(mu_->mu_, std::adopt_lock);
+    std::unique_lock<std::mutex> lock(mu_->mu_, std::adopt_lock); // std::adopt_lock:表示这个互斥量已经被Lock了,必须把互斥量提前lock,否则会报异常。
     cv_.wait(lock);
     lock.release();
   }
@@ -80,7 +84,7 @@ class CondVar {
 
  private:
   std::condition_variable cv_;
-  Mutex* const mu_;
+  Mutex* const mu_; // 指针本身是常量不可以变;成员变量级的mutex是不能在const函数中lock的(因为lock是会引起改变的)todo 验证
 };
 
 inline bool Snappy_Compress(const char* input, size_t length,
